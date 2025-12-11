@@ -24,11 +24,15 @@ import {
 } from "firebase/firestore";
 import { db } from "../../src/firebase";
 
+// use theme for readable colors
+import { useTheme } from "../contexts/ThemeContext";
+
 // correct relative import
 import MessageOptionsModal from "../components/MessageOptionsModal";
 
 export const ChatScreen = ({ route }: any) => {
   const { anonId, role } = route.params || { anonId: "0", role: "student" };
+  const { colors, isDark } = useTheme();
 
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -152,6 +156,8 @@ export const ChatScreen = ({ route }: any) => {
           renderItem={({ item }) => {
             const isMentorMsg = item.isAdmin;
             const isMine = isMentorMsg ? role === "admin" : item.anonId == anonId;
+            // colored bubble if mentor or my message — use white text on these for readability
+            const bubbleIsColored = isMentorMsg || isMine;
 
             return (
               <TouchableOpacity
@@ -168,15 +174,21 @@ export const ChatScreen = ({ route }: any) => {
                   colors={isMentorMsg ? ["#E4D5FF", "#B89AFF"] : ["rgba(255,255,255,0.15)", "rgba(255,255,255,0.05)"]}
                   style={[styles.bubble, isMentorMsg && styles.mentorGlow]}
                 >
-                  <Text style={styles.name}>
+                  {/* Name: white on colored bubble, theme text otherwise */}
+                  <Text style={[styles.name, bubbleIsColored ? { color: "#FFFFFF" } : { color: colors.text }]}>
                     {isMentorMsg ? "SuperPaac Mentor" : `Anonymous #${item.anonId}`}
                   </Text>
-                  <Text style={styles.msg}>{item.text}</Text>
-                  <Text style={styles.time}>{item.time}</Text>
+                  {/* Message text: white on colored bubble, theme text otherwise */}
+                  <Text style={[styles.msg, bubbleIsColored ? { color: "#FFFFFF" } : { color: colors.text }]}>{item.text}</Text>
+                  {/* Time: muted but readable */}
+                  <Text style={[styles.time, bubbleIsColored ? { color: "#E5E7EB" } : { color: isDark ? "#CBD5F5" : colors.textSecondary }]}>{item.time}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             );
           }}
+          // allow taps while keyboard is open and ensure list grows correctly
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}
+          keyboardShouldPersistTaps="handled"
         />
 
         {someoneTyping && (
