@@ -621,29 +621,32 @@ export default function ChatTabScreen() {
             <LinearGradient colors={[colors.header, colors.surface]} style={styles.header}>
               <View style={styles.headerLeft}>
                 <View style={styles.avatarCircle}>
-                  <Ionicons name="people" size={20} color="#2c92abff" />
+                  <Ionicons name="people" size={20} color={colors.primary} />
                 </View>
                 <View>
-                  <Text style={styles.headerTitle}>SuperPaac Space</Text>
-                  <Text style={styles.headerSubtitle}>You’re chatting as {currentDisplayName}</Text>
+                  // Use theme text color so header is readable in light mode
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>SuperPaac Space</Text>
+                  // Use secondary text color for the subtitle (light/dark)
+                  <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>You’re chatting as {currentDisplayName}</Text>
                 </View>
               </View>
 
               <View style={styles.headerRight}>
+                {/* Use theme icon color so icons are visible in light theme */}
                 <TouchableOpacity onPress={handleOpenSearch} style={styles.headerButton}>
-                  <Ionicons name="search" size={20} color="#E5E7EB" />
+                  <Ionicons name="search" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => setShowChatInfo(true)} style={styles.headerButton}>
-                  <Ionicons name="information-circle" size={20} color="#E5E7EB" />
+                  <Ionicons name="information-circle" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={toggleTheme} style={styles.headerButton}>
-                  <Ionicons name={isDark ? "sunny" : "moon"} size={20} color="#E5E7EB" />
+                  <Ionicons name={isDark ? "sunny" : "moon"} size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={handleLogout} style={[styles.headerButton, { paddingHorizontal: 12 }]}>
-                  <Ionicons name="log-out-outline" size={20} color="#E5E7EB" />
+                  <Ionicons name="log-out-outline" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
             </LinearGradient>
@@ -681,7 +684,7 @@ export default function ChatTabScreen() {
             {/* MESSAGES */}
             <View style={styles.messagesContainer}>
               {(showSearch ? filteredMessages : messages).length === 0 && (
-                <Text style={styles.emptyText}>{showSearch && searchQuery ? `No results found for "${searchQuery}"` : "Say hi 👋\nShare anything here."}</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{showSearch && searchQuery ? `No results found for "${searchQuery}"` : "Say hi 👋\nShare anything here."}</Text>
               )}
 
               {/* FlatList with keyboardShouldPersistTaps to enable scroll when keyboard is visible */}
@@ -708,19 +711,21 @@ export default function ChatTabScreen() {
             {/* INPUT BAR */}
             <View style={[styles.inputBar, { backgroundColor: "transparent" }]}>
               <View style={[styles.inputGlass, { backgroundColor: colors.input }]}>
+                {/* use theme secondary color for input icons so they remain visible in light theme */}
                 <TouchableOpacity style={styles.iconButton} onPress={handlePickImage}>
-                  <Ionicons name="image-outline" size={20} color="#E5E7EB" />
+                  <Ionicons name="image-outline" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.iconButton} onPress={handlePickFile}>
-                  <Ionicons name="attach-outline" size={20} color="#E5E7EB" />
+                  <Ionicons name="attach-outline" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.iconButton} onPress={() => setInput((prev) => prev.includes("@SuperPaac Mentor") ? prev : (prev ? prev + " " : "") + "@SuperPaac Mentor ")}>
-                  <MaterialCommunityIcons name="at" size={20} color="#E5E7EB" />
+                  <MaterialCommunityIcons name="at" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
-                <TextInput style={styles.input} placeholder={isAdmin ? "Reply to your students…" : "Share your doubts or thoughts…"} placeholderTextColor="#9CA3AF" value={input} onChangeText={setInput} multiline />
+                {/* ensure input text uses theme color for readability in light theme */}
+                <TextInput style={[styles.input, { color: colors.text }]} placeholder={isAdmin ? "Reply to your students…" : "Share your doubts or thoughts…"} placeholderTextColor={colors.textMuted} value={input} onChangeText={setInput} multiline />
 
                 <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={sending || !input.trim()}>
                   {sending ? <ActivityIndicator size="small" color="#000000ff" /> : <Ionicons name="send" size={18} color="#020617" />}
