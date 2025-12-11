@@ -556,9 +556,10 @@ export default function ChatTabScreen() {
                 },
           ]}
         >
-          <Text style={[styles.nameText, { color: isDark ? "#E5E7EB" : colors.text }]}>
+          {/* Use white text for colored bubbles, dark text only for light gray other bubble */}
+          <Text style={[styles.nameText, { color: item.isAdmin || mine ? "#FFFFFF" : (isDark ? "#E5E7EB" : colors.text) }]}>
             {item.isAdmin ? "SuperPaac Mentor" : `Anonymous #${item.anonId}`}{" "}
-            {item.edited && <Text style={[styles.editedLabel, { color: isDark ? "#E5E7EB" : colors.text }]}>(edited)</Text>}
+            {item.edited && <Text style={[styles.editedLabel, { color: item.isAdmin || mine ? "#FFFFFF" : (isDark ? "#E5E7EB" : colors.text) }]}>(edited)</Text>}
             {item.pinned && (
               <Ionicons name="pin" size={12} color={colors.warning} style={{ marginLeft: 4 }} />
             )}
@@ -571,18 +572,18 @@ export default function ChatTabScreen() {
             </View>
           )}
 
-          {item.type === "text" && !!item.text && <Text style={[styles.messageText, { color: isDark ? "#F9FAFB" : colors.text }]}>{item.text}</Text>}
+          {item.type === "text" && !!item.text && <Text style={[styles.messageText, { color: item.isAdmin || mine ? "#FFFFFF" : (isDark ? "#F9FAFB" : colors.text) }]}>{item.text}</Text>}
 
           {item.type === "image" && item.mediaUrl && <Image source={{ uri: item.mediaUrl }} style={styles.imageMessage} />}
 
           {item.type === "file" && item.mediaUrl && (
             <View style={styles.fileContainer}>
-              <Ionicons name="document-text-outline" size={18} color="#E5E7EB" />
-              <Text style={[styles.fileName, { color: isDark ? "#E5E7EB" : colors.text }]} numberOfLines={1}>{item.mediaName || "Attachment"}</Text>
+              <Ionicons name="document-text-outline" size={18} color={item.isAdmin || mine ? "#FFFFFF" : "#E5E7EB"} />
+              <Text style={[styles.fileName, { color: item.isAdmin || mine ? "#FFFFFF" : (isDark ? "#E5E7EB" : colors.text) }]} numberOfLines={1}>{item.mediaName || "Attachment"}</Text>
             </View>
           )}
 
-          <Text style={[styles.timeText, { color: isDark ? "#CBD5F5" : colors.textSecondary }]}>{item.time}</Text>
+          <Text style={[styles.timeText, { color: item.isAdmin || mine ? "#FFFFFF" : (isDark ? "#CBD5F5" : colors.textSecondary) }]}>{item.time}</Text>
 
           {item.reactions && Object.keys(item.reactions).length > 0 && (
             <View style={styles.reactionsContainer}>
@@ -803,10 +804,11 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 2,
   },
-  nameText: { fontSize: 11, fontWeight: "600", color: isDark ? "#E5E7EB" : colors.text },
-  editedLabel: { fontSize: 10, color: isDark ? "#E5E7EB" : colors.text },
-  messageText: { fontSize: 14, color: isDark ? "#F9FAFB" : colors.text, marginTop: 4 },
-  timeText: { fontSize: 10, color: isDark ? "#CBD5F5" : colors.textSecondary, marginTop: 4, alignSelf: "flex-end" },
+  // Base dark theme colors - overridden by inline styles for light theme
+  nameText: { fontSize: 11, fontWeight: "600", color: "#E5E7EB" },
+  editedLabel: { fontSize: 10, color: "#E5E7EB" },
+  messageText: { fontSize: 14, color: "#F9FAFB", marginTop: 4 },
+  timeText: { fontSize: 10, color: "#CBD5F5", marginTop: 4, alignSelf: "flex-end" },
   imageMessage: { width: 220, height: 220, borderRadius: 16, marginTop: 6 },
   fileContainer: { marginTop: 6, flexDirection: "row", alignItems: "center" },
   fileName: { color: "#E5E7EB", fontSize: 12, marginLeft: 6, maxWidth: 180 },
