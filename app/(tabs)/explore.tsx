@@ -1,4 +1,3 @@
-// app/(tabs)/explore.tsx
 import { useGlobalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -8,448 +7,387 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Dimensions,
+  Platform,
+  SafeAreaView,
+  StatusBar,
   Image,
+  Linking,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   collection,
-  getDocs,
   query,
-  orderBy,
   where,
   onSnapshot,
+  orderBy,
 } from "firebase/firestore";
-import { Ionicons } from "@expo/vector-icons";
 import { db } from "../../src/firebase";
+import { useTheme } from "../../src/contexts/ThemeContext";
 
+/* ---------------- TYPES ---------------- */
 type StudentRecord = {
   id: string;
-  rollNo: string;
-  anonId: number;
+  anonId: string;
 };
 
 type ChatMessage = {
   id: string;
-  text: string;
+  text?: string;
   isAdmin: boolean;
   anonId: string;
   time: string;
-  type?: "text" | "image" | "file";
+  type?: "text" | "image" | "file" | "link";
   mediaUrl?: string;
   mediaName?: string;
-  reactions?: { [emoji: string]: string[] };
-  isBroadcast?: boolean;
 };
 
+/* ---------------- SCREEN ---------------- */
 export default function ExploreScreen() {
-  const { role, rollNo } = useGlobalSearchParams<{
-    role?: string;
-    rollNo?: string;
-  }>();
+  const { role, rollNo } =
+    useGlobalSearchParams<{ role?: string; rollNo?: string }>();
+  const { colors } = useTheme();
 
   const isAdminUser =
-    role === "admin" || (rollNo && rollNo.toLowerCase() === "admin");
+    role === "admin" ||
+    (rollNo && String(rollNo).toLowerCase() === "admin");
 
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
+  const [selectedStudent, setSelectedStudent] =
+    useState<StudentRecord | null>(null);
 
-  const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(
-    null
-  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  // Load students
+  const [layoutWidth, setLayoutWidth] = useState(
+    Dimensions.get("window").width
+  );
+
+  const topPad =
+    Platform.OS === "android"
+      ? Math.max(StatusBar.currentHeight ?? 18, 14)
+      : 14;
+
+  /* ---------------- RESPONSIVE ---------------- */
+  useEffect(() => {
+    const sub = Dimensions.addEventListener("change", ({ window }) => {
+      setLayoutWidth(window.width);
+    });
+    return () => sub?.remove?.();
+  }, []);
+
+  /* ---------------- STUDENTS ---------------- */
   useEffect(() => {
     if (!isAdminUser) return;
 
-    const loadStudents = async () => {
-      try {
-        const qStudents = query(
-          collection(db, "students"),
-          orderBy("anonId", "asc")
-        );
-        const snap = await getDocs(qStudents);
+    setLoadingStudents(true);
 
-        const list: StudentRecord[] = snap.docs.map((docSnap) => {
-          const data: any = docSnap.data();
-          return {
-            id: docSnap.id,
-            rollNo: data.rollNo || docSnap.id,
-            anonId: data.anonId || 0,
-          };
-        });
+    const q = query(
+      collection(db, "groupChatMessages"),
+      where("isAdmin", "==", false)
+    );
 
-        setStudents(list);
-      } catch (e) {
-        console.log("Error loading students:", e);
-      } finally {
-        setLoadingStudents(false);
-      }
-    };
+    const unsub = onSnapshot(q, (snap) => {
+      const map = new Map<string, StudentRecord>();
 
-    loadStudents();
+      snap.docs.forEach((d) => {
+        const data: any = d.data();
+        const cid = String(data.conversationId ?? data.anonId);
+        if (!cid) return;
+
+        if (!map.has(cid)) {
+          map.set(cid, { id: cid, anonId: cid });
+        }
+      });
+
+      setStudents(Array.from(map.values()));
+      setLoadingStudents(false);
+    });
+
+    return () => unsub();
   }, [isAdminUser]);
 
-  // Load conversation for selected anonId
+  /* ---------------- MESSAGES ---------------- */
   useEffect(() => {
-    if (!isAdminUser || !selectedStudent) return;
+    if (!isAdminUser || !selectedStudent) {
+      setMessages([]);
+      return;
+    }
 
     setLoadingMessages(true);
 
-    const qMsgs = query(
+    const anonId = String(selectedStudent.anonId);
+
+    const q = query(
       collection(db, "groupChatMessages"),
-      where("anonId", "==", String(selectedStudent.anonId)),
+      where("anonId", "==", anonId),
       orderBy("timestamp", "asc")
     );
 
-    const unsubscribe = onSnapshot(
-      qMsgs,
-      (snapshot) => {
-        const loaded: ChatMessage[] = snapshot.docs.map((docSnap) => {
-          const data: any = docSnap.data();
-          const createdAt = data.timestamp?.toDate
-            ? data.timestamp.toDate().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "";
-
+    const unsub = onSnapshot(q, (snap) => {
+      setMessages(
+        snap.docs.map((doc) => {
+          const d: any = doc.data();
           return {
-            id: docSnap.id,
-            text: data.text || "",
-            isAdmin: !!data.isAdmin,
-            anonId: String(data.anonId ?? ""),
-            time: createdAt,
-            type: data.type || "text",
-            mediaUrl: data.mediaUrl,
-            mediaName: data.mediaName,
-            reactions: data.reactions || {},
-            isBroadcast: !!data.isBroadcast,
+            id: doc.id,
+            text: d.text,
+            isAdmin: !!d.isAdmin,
+            anonId: String(d.anonId),
+            type: d.type ?? "text",
+            mediaUrl: d.mediaUrl,
+            mediaName: d.mediaName,
+            time: d.timestamp?.toDate
+              ? d.timestamp.toDate().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "",
           };
-        });
+        })
+      );
+      setLoadingMessages(false);
+    });
 
-        setMessages(loaded);
-        setLoadingMessages(false);
-      },
-      (error) => {
-        console.log("Error loading messages:", error);
-        setLoadingMessages(false);
-      }
-    );
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [isAdminUser, selectedStudent]);
 
-  // Not admin → show locked screen
   if (!isAdminUser) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Mentor Area 🔒</Text>
-        <Text style={styles.text}>
-          This section is only visible to SuperPaac mentors.
+      <SafeAreaView style={styles.safe}>
+        <Text style={{ textAlign: "center", marginTop: 40 }}>
+          Mentor Access Only
         </Text>
-        <Text style={styles.textSmall}>
-          If you’re a student, you can use the Chat tab to ask doubts
-          anonymously.
-        </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const reactions = item.reactions || {};
+  const isWide = layoutWidth >= 900;
+  const showStudentList = !(!isWide && selectedStudent);
+  const showConversation = isWide || !!selectedStudent;
 
-    return (
-      <View
-        style={[
-          styles.msgBubble,
-          item.isAdmin ? styles.msgAdmin : styles.msgStudent,
-        ]}
-      >
-        {item.isBroadcast && (
-          <Text style={styles.broadcastLabel}>Broadcast</Text>
-        )}
-
-        <Text style={styles.msgFrom}>
-          {item.isAdmin
-            ? "SuperPaac Mentor"
-            : `Anonymous #${item.anonId}`}
-        </Text>
-
-        {/* TEXT */}
-        {(!item.type || item.type === "text") && !!item.text && (
-          <Text style={styles.msgText}>{item.text}</Text>
-        )}
-
-        {/* IMAGE */}
-        {item.type === "image" && item.mediaUrl && (
-          <Image
-            source={{ uri: item.mediaUrl }}
-            style={styles.msgImage}
-          />
-        )}
-
-        {/* FILE */}
-        {item.type === "file" && item.mediaUrl && (
-          <View style={styles.msgFileRow}>
-            <Ionicons
-              name="document-text-outline"
-              size={18}
-              color="#E5E7EB"
-            />
-            <Text style={styles.msgFileName} numberOfLines={1}>
-              {item.mediaName || "Attachment"}
-            </Text>
-          </View>
-        )}
-
-        {/* REACTIONS */}
-        {Object.keys(reactions).length > 0 && (
-          <View style={styles.reactionsRow}>
-            {Object.entries(reactions).map(([emoji, users]) => {
-              const arr = Array.isArray(users) ? users : [];
-              return (
-                <View key={emoji} style={styles.reactionBadge}>
-                  <Text style={styles.reactionText}>
-                    {emoji} {arr.length > 1 ? arr.length : ""}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        <Text style={styles.msgTime}>{item.time}</Text>
-      </View>
-    );
-  };
-
-  // Admin Screen
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Mentor Panel</Text>
-      <Text style={styles.textSmall}>
-        Tap an Anonymous ID to see all messages that student posted in the
-        group chat.
-      </Text>
+    <SafeAreaView style={styles.safe}>
+      {/* HEADER */}
+      <LinearGradient
+        colors={[colors.primary, colors.secondary]}
+        style={[styles.header, { paddingTop: topPad }]}
+      >
+        <Text style={styles.headerTitle}>Mentor Panel</Text>
+        {selectedStudent && !isWide && (
+          <TouchableOpacity onPress={() => setSelectedStudent(null)}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+        )}
+      </LinearGradient>
 
-      {loadingStudents ? (
-        <ActivityIndicator style={{ marginTop: 24 }} />
-      ) : (
-        <View style={{ flexDirection: "row", marginTop: 16, flex: 1 }}>
-          {/* Left: student list */}
-          <View style={{ flex: 1, marginRight: 8 }}>
+      <View style={[styles.main, { flexDirection: isWide ? "row" : "column" }]}>
+        {/* STUDENTS */}
+        {showStudentList && (
+          <View style={[styles.left, isWide && styles.leftWide]}>
             <Text style={styles.sectionTitle}>Students</Text>
-            <FlatList
-              data={students}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => setSelectedStudent(item)}
-                  style={[
-                    styles.studentRow,
-                    selectedStudent?.id === item.id &&
-                      styles.studentRowActive,
-                  ]}
-                >
-                  <Text style={styles.anonText}>
-                    Anonymous #{item.anonId}
-                  </Text>
-                  <Text style={styles.rollHint}>
-                    Tap to view conversation
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
 
-          {/* Right: messages */}
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={styles.sectionTitle}>Conversation</Text>
-
-            {!selectedStudent ? (
-              <Text style={styles.textSmall}>
-                Select a student on the left to view their messages.
-              </Text>
+            {loadingStudents ? (
+              <ActivityIndicator />
             ) : (
-              <>
-                <View style={styles.conversationHeader}>
-                  <Text style={styles.convTitle}>
-                    Anonymous #{selectedStudent.anonId}
-                  </Text>
-                  <Text style={styles.convSubtitle}>
-                    Messages this student posted in SuperPaac Space
-                  </Text>
-                </View>
-
-                {loadingMessages ? (
-                  <ActivityIndicator style={{ marginTop: 16 }} />
-                ) : (
-                  <FlatList
-                    style={{ flex: 1 }}
-                    data={messages}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderMessage}
-                  />
+              <FlatList
+                data={students}
+                keyExtractor={(i) => i.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => setSelectedStudent(item)}
+                    style={styles.studentCard}
+                  >
+                    <Ionicons name="person" size={16} color="#fff" />
+                    <Text style={styles.studentName}>
+                      Anonymous #{item.anonId}
+                    </Text>
+                  </TouchableOpacity>
                 )}
-              </>
+              />
             )}
           </View>
-        </View>
-      )}
-    </View>
+        )}
+
+        {/* CONVERSATION */}
+        {showConversation && (
+          <View style={styles.right}>
+            {loadingMessages ? (
+              <ActivityIndicator />
+            ) : (
+              <FlatList
+                data={messages}
+                keyExtractor={(m) => m.id}
+                renderItem={({ item }) => (
+                  <View
+                    style={[
+                      styles.bubble,
+                      item.isAdmin ? styles.admin : styles.student,
+                    ]}
+                  >
+                    {/* TEXT */}
+                    {item.type === "text" && (
+                      <Text style={{ fontSize: 14, lineHeight: 20, color: "#111827" }}>
+  {item.text}
+</Text>
+
+                    )}
+
+                    {/* IMAGE */}
+                    {item.type === "image" && item.mediaUrl && (
+                      <Image
+                        source={{ uri: item.mediaUrl }}
+                        style={styles.image}
+                      />
+                    )}
+
+                    {/* FILE / LINK */}
+                   {item.type === "file" && item.mediaUrl && (
+  <TouchableOpacity
+    onPress={() => Linking.openURL(item.mediaUrl!)}
+    style={styles.fileBox}
+  >
+    <Ionicons name="document" size={16} />
+    <Text
+      numberOfLines={1}
+      style={{ fontSize: 13, fontWeight: "600", color: "#1e293b" }}
+    >
+      {item.mediaName || "Open file"}
+    </Text>
+  </TouchableOpacity>
+)}
+
+
+                    <Text style={styles.time}>{item.time}</Text>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: "#020617",
-    paddingHorizontal: 20,
-    paddingTop: 60,
+    backgroundColor: "#0b1020",
   },
 
-  title: {
-    color: "#F9FAFB",
+  header: {
+    minHeight: 76,
+    paddingHorizontal: 22,
+    paddingBottom: 14,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+  },
+
+  headerTitle: {
+    color: "#ffffff",
     fontSize: 22,
-    fontWeight: "700",
+    fontWeight: "800",
+    letterSpacing: 0.4,
   },
 
-  text: {
-    color: "#D1D5DB",
-    marginTop: 8,
-    fontSize: 14,
+  main: {
+    flex: 1,
+    padding: 16,
+    gap: 14,
   },
 
-  textSmall: {
-    color: "#9CA3AF",
-    marginTop: 4,
-    fontSize: 12,
+  left: {
+    width: "100%",
+    backgroundColor: "#0f172a",
+    borderRadius: 22,
+    padding: 16,
+  },
+
+  leftWide: {
+    width: "32%",
+  },
+
+  right: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+    borderRadius: 22,
+    padding: 16,
   },
 
   sectionTitle: {
-    color: "#E5E7EB",
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-
-  studentRow: {
-    backgroundColor: "#0B1220",
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: "#111827",
-  },
-
-  studentRowActive: {
-    borderColor: "#4F46E5",
-  },
-
-  anonText: {
-    color: "#F9FAFB",
-    fontWeight: "600",
-  },
-
-  rollHint: {
-    color: "#9CA3AF",
-    fontSize: 12,
-  },
-
-  conversationHeader: {
-    marginBottom: 8,
-  },
-
-  convTitle: {
-    color: "#F9FAFB",
+    fontSize: 14,
     fontWeight: "700",
-  },
-
-  convSubtitle: {
-    color: "#9CA3AF",
-    fontSize: 12,
-  },
-
-  msgBubble: {
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
-    maxWidth: "100%",
-  },
-
-  msgStudent: {
-    backgroundColor: "rgba(15,23,42,0.9)",
-    alignSelf: "flex-start",
-  },
-
-  msgAdmin: {
-    backgroundColor: "#4F46E5",
-    alignSelf: "flex-end",
-  },
-
-  msgFrom: {
-    color: "#E5E7EB",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  msgText: {
-    color: "#F9FAFB",
-    fontSize: 13,
-    marginTop: 2,
-  },
-
-  msgTime: {
-    color: "#CBD5F5",
-    fontSize: 10,
-    marginTop: 4,
-    alignSelf: "flex-end",
-  },
-
-  msgImage: {
-    width: 180,
-    height: 180,
-    borderRadius: 12,
-    marginTop: 6,
-  },
-
-  msgFileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
-
-  msgFileName: {
-    color: "#E5E7EB",
-    fontSize: 12,
-    marginLeft: 6,
-    maxWidth: 200,
-  },
-
-  reactionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 6,
-    gap: 4,
-  },
-
-  reactionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.6)",
-  },
-
-  reactionText: {
-    fontSize: 11,
-    color: "#F9FAFB",
-  },
-
-  broadcastLabel: {
-    fontSize: 10,
-    color: "#FACC15",
-    fontWeight: "700",
-    marginBottom: 2,
+    color: "#a5b4fc",
+    marginBottom: 16,
+    letterSpacing: 0.3,
     textTransform: "uppercase",
   },
+
+  studentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    marginBottom: 12,
+    backgroundColor: "#111827",
+    gap: 10,
+  },
+
+  studentName: {
+    color: "#f9fafb",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  bubble: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    marginVertical: 8,
+    maxWidth: "78%",
+  },
+
+  admin: {
+    backgroundColor: "#6366f1",
+    alignSelf: "flex-end",
+    borderTopRightRadius: 6,
+  },
+
+  student: {
+    backgroundColor: "#e5e7eb",
+    alignSelf: "flex-start",
+    borderTopLeftRadius: 6,
+  },
+
+  time: {
+    fontSize: 10,
+    opacity: 0.55,
+    marginTop: 6,
+    alignSelf: "flex-end",
+  },
+
+  image: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    marginTop: 8,
+    backgroundColor: "#c7d2fe",
+  },
+
+  fileBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.7)",
+  },
 });
+

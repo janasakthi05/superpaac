@@ -1,5 +1,5 @@
 // app/student-change-password.tsx
-import React, { useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,14 +8,19 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Animated,
+  Easing,
+  TextInput as RNTextInput,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { LinearGradient } from "expo-linear-gradient";
 import { db } from "../src/firebase";
 
-// helper: default student password from roll number
+import AnimatedBackground from "../src/components/AnimatedBackground";
+import { showToast } from "../src/components/VibeToast";
+
 function getDefaultStudentPassword(rollUpper: string): string {
   const dept = rollUpper.slice(2, 5);
   const num = rollUpper.slice(5);
@@ -31,6 +36,34 @@ export default function StudentChangePasswordScreen() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const rollRef = useRef<RNTextInput | null>(null);
+  const curRef = useRef<RNTextInput | null>(null);
+  const nextRef = useRef<RNTextInput | null>(null);
+  const confirmRef = useRef<RNTextInput | null>(null);
+
+  const rollAnim = useRef(new Animated.Value(roll ? 1 : 0)).current;
+  const curAnim = useRef(new Animated.Value(current ? 1 : 0)).current;
+  const nextAnim = useRef(new Animated.Value(next ? 1 : 0)).current;
+  const confirmAnim = useRef(new Animated.Value(confirm ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(rollAnim, { toValue: roll ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [roll]);
+  useEffect(() => {
+    Animated.timing(curAnim, { toValue: current ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [current]);
+  useEffect(() => {
+    Animated.timing(nextAnim, { toValue: next ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [next]);
+  useEffect(() => {
+    Animated.timing(confirmAnim, { toValue: confirm ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [confirm]);
+
+  const focusScale = useRef(new Animated.Value(1)).current;
+  function setCardFocus(focused: boolean) {
+    Animated.timing(focusScale, { toValue: focused ? 1.01 : 1, duration: 140, useNativeDriver: true, easing: Easing.out(Easing.cubic) }).start();
+  }
+
   const handleChangePassword = async () => {
     const rollTrim = roll.trim();
     const curTrim = current.trim();
@@ -38,20 +71,17 @@ export default function StudentChangePasswordScreen() {
     const confirmTrim = confirm.trim();
 
     if (!rollTrim || !curTrim || !nextTrim || !confirmTrim) {
-      Alert.alert("Error", "Fill all fields");
+      showToast("Fill all fields", { type: "info" });
       return;
     }
 
     if (nextTrim !== confirmTrim) {
-      Alert.alert("Error", "New passwords do not match");
+      showToast("New passwords do not match", { type: "error" });
       return;
     }
 
     if (nextTrim.length < 6) {
-      Alert.alert(
-        "Weak password",
-        "New password should be at least 6 characters."
-      );
+      showToast("New password should be at least 6 characters.", { type: "info" });
       return;
     }
 
@@ -60,184 +90,112 @@ export default function StudentChangePasswordScreen() {
 
       const rollUpper = rollTrim.toUpperCase();
 
-      // 1) ensure roll is whitelisted
       const enrolledRef = doc(db, "enrolledStudents", rollUpper);
       const enrolledSnap = await getDoc(enrolledRef);
 
       if (!enrolledSnap.exists() || enrolledSnap.data()?.valid !== true) {
-        Alert.alert(
-          "Not allowed",
-          "This roll number is not in the SuperPaac list."
-        );
+        showToast("This roll number is not in the SuperPaac list.", { type: "error" });
         return;
       }
 
-      // 2) get studentAuth doc or compute default
       const authRef = doc(db, "studentAuth", rollUpper);
       const authSnap = await getDoc(authRef);
 
       let expectedPassword: string;
 
       if (authSnap.exists()) {
-        expectedPassword = String(
-          (authSnap.data() as any).password ?? ""
-        ).trim();
+        expectedPassword = String((authSnap.data() as any).password ?? "").trim();
       } else {
-        // default pattern (dept + number, lowercase)
         expectedPassword = getDefaultStudentPassword(rollUpper);
         await setDoc(authRef, { password: expectedPassword }, { merge: true });
       }
 
       if (curTrim !== expectedPassword) {
-        Alert.alert("Error", "Current password is wrong");
+        showToast("Current password is wrong", { type: "error" });
         return;
       }
 
-      // 3) update to new password
       await setDoc(authRef, { password: nextTrim }, { merge: true });
 
-      Alert.alert("Success", "Password updated.", [
-        { text: "OK", onPress: () => router.replace("/login") },
-      ]);
+      showToast("Password updated.", { type: "success" });
+      router.replace("/login");
     } catch (e) {
       console.log("Student change password error:", e);
-      Alert.alert("Error", "Could not update password. Try again.");
+      showToast("Could not update password. Try again.", { type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <LinearGradient
-      colors={["#020617", "#0F172A", "#020617"]}
-      style={styles.container}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.inner}>
-          <Text style={styles.title}>Student password</Text>
-          <Text style={styles.subTitle}>
-            Change your SuperPaac login password.
-          </Text>
+    <View style={{ flex: 1 }}>
+      <LinearGradient colors={["#041025", "#07102A", "#081226"]} style={StyleSheet.absoluteFill} />
+      <AnimatedBackground />
 
-          <View style={styles.card}>
-            <TextInput
-              style={styles.input}
-              placeholder="Roll number (e.g. 23CDR061)"
-              placeholderTextColor="#64748B"
-              autoCapitalize="characters"
-              value={roll}
-              onChangeText={setRoll}
-            />
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <View style={styles.container}>
+          <Animated.View style={[styles.cardContainer, { transform: [{ scale: focusScale }] }]}>
+            <Text style={styles.title}>Student password</Text>
+            <Text style={styles.subtitle}>Change your SuperPaac login password.</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Current password"
-              placeholderTextColor="#64748B"
-              secureTextEntry
-              value={current}
-              onChangeText={setCurrent}
-            />
+            <View style={styles.inputWrapper}>
+              <Animated.Text style={[styles.floatingLabel, { transform: [{ translateY: rollAnim.interpolate({ inputRange: [0, 1], outputRange: [12, -10] }) }, { scale: rollAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] }) }], opacity: rollAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }]}>
+                Roll number (e.g. 23CDR061)
+              </Animated.Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="New password"
-              placeholderTextColor="#64748B"
-              secureTextEntry
-              value={next}
-              onChangeText={setNext}
-            />
+              <TextInput ref={rollRef} style={styles.input} placeholder="" placeholderTextColor="#94A3B8" autoCapitalize="characters" value={roll} onChangeText={setRoll} onFocus={() => setCardFocus(true)} onBlur={() => setCardFocus(false)} returnKeyType="next" onSubmitEditing={() => curRef.current?.focus()} />
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm new password"
-              placeholderTextColor="#64748B"
-              secureTextEntry
-              value={confirm}
-              onChangeText={setConfirm}
-            />
+            <View style={styles.inputWrapper}>
+              <Animated.Text style={[styles.floatingLabel, { transform: [{ translateY: curAnim.interpolate({ inputRange: [0, 1], outputRange: [12, -10] }) }, { scale: curAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] }) }], opacity: curAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }]}>
+                Current password
+              </Animated.Text>
 
-            <TouchableOpacity
-              style={[styles.button, loading && { opacity: 0.6 }]}
-              onPress={handleChangePassword}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>
-                {loading ? "Saving..." : "Update password"}
-              </Text>
-            </TouchableOpacity>
+              <TextInput ref={curRef} style={styles.input} placeholder="" placeholderTextColor="#94A3B8" secureTextEntry value={current} onChangeText={setCurrent} onFocus={() => setCardFocus(true)} onBlur={() => setCardFocus(false)} returnKeyType="next" onSubmitEditing={() => nextRef.current?.focus()} />
+            </View>
 
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ marginTop: 10 }}
-            >
+            <View style={styles.inputWrapper}>
+              <Animated.Text style={[styles.floatingLabel, { transform: [{ translateY: nextAnim.interpolate({ inputRange: [0, 1], outputRange: [12, -10] }) }, { scale: nextAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] }) }], opacity: nextAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }]}>
+                New password
+              </Animated.Text>
+
+              <TextInput ref={nextRef} style={styles.input} placeholder="" placeholderTextColor="#94A3B8" secureTextEntry value={next} onChangeText={setNext} onFocus={() => setCardFocus(true)} onBlur={() => setCardFocus(false)} returnKeyType="next" onSubmitEditing={() => confirmRef.current?.focus()} />
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <Animated.Text style={[styles.floatingLabel, { transform: [{ translateY: confirmAnim.interpolate({ inputRange: [0, 1], outputRange: [12, -10] }) }, { scale: confirmAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] }) }], opacity: confirmAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }]}>
+                Confirm new password
+              </Animated.Text>
+
+              <TextInput ref={confirmRef} style={styles.input} placeholder="" placeholderTextColor="#94A3B8" secureTextEntry value={confirm} onChangeText={setConfirm} onFocus={() => setCardFocus(true)} onBlur={() => setCardFocus(false)} returnKeyType="done" onSubmitEditing={handleChangePassword} />
+            </View>
+
+            <Pressable onPress={handleChangePassword} disabled={loading} style={({ pressed }) => [styles.ctaWrap, pressed && { opacity: 0.9 }, loading && { opacity: 0.6 }]}>
+              <LinearGradient colors={["#FFE3A8", "#FFC857"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cta}>
+                <Text style={styles.ctaText}>{loading ? "Saving..." : "Update password"}</Text>
+              </LinearGradient>
+            </Pressable>
+
+            <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 10 }}>
               <Text style={styles.backLink}>← Back to login</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  title: {
-    color: "#F9FAFB",
-    fontSize: 24,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  subTitle: {
-    color: "#9CA3AF",
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  card: {
-    backgroundColor: "rgba(15,23,42,0.95)",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.3)",
-  },
-  input: {
-    backgroundColor: "#020617",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: "#F9FAFB",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    fontSize: 14,
-  },
-  button: {
-    backgroundColor: "#4F46E5",
-    borderRadius: 999,
-    paddingVertical: 14,
-    marginTop: 8,
-  },
-  buttonText: {
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 16,
-    color: "#F9FAFB",
-  },
-  backLink: {
-    color: "#818CF8",
-    fontSize: 12,
-    textAlign: "center",
-    marginTop: 8,
-  },
+  container: { flex: 1, justifyContent: "center", padding: 20, alignItems: "center" },
+  cardContainer: { width: "100%", maxWidth: 640, backgroundColor: "rgba(12,18,32,0.72)", borderRadius: 16, padding: 22, borderWidth: 1, borderColor: "rgba(255,255,255,0.03)", shadowColor: "#000", shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14 },
+  title: { fontSize: 22, fontWeight: "800", color: "#F9FAFB", marginBottom: 4 },
+  subtitle: { color: "#9CA3AF", marginBottom: 12 },
+  inputWrapper: { marginBottom: 12, position: "relative" },
+  floatingLabel: { position: "absolute", left: 14, top: 12, color: "#C7D2DA", fontSize: 13, zIndex: 10 },
+  input: { backgroundColor: "rgba(2,6,23,0.86)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, color: "#F9FAFB", borderWidth: 1, borderColor: "rgba(255,255,255,0.03)", fontSize: 15 },
+  ctaWrap: { marginTop: 8, borderRadius: 999, overflow: "hidden" },
+  cta: { paddingVertical: 14, alignItems: "center", justifyContent: "center", borderRadius: 999 },
+  ctaText: { fontWeight: "800", fontSize: 16, color: "#111827" },
+  backLink: { color: "#BEDBFF", fontSize: 13, textAlign: "center", marginTop: 8 },
 });

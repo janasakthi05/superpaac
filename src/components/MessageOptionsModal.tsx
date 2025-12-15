@@ -1,136 +1,163 @@
-// src/components/MessageOptionsModal.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import {
+  Modal,
   View,
   Text,
   TouchableOpacity,
-  Modal,
   StyleSheet,
   Platform,
+  AccessibilityInfo,
+  Alert,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+type Message = {
+  id: string;
+  anonId?: string | number;
+  isAdmin?: boolean;
+  text?: string;
+};
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onReply: () => void;
-  onReact: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  message?: Message | null;
+  currentAnonId: string | number;
+  currentRole: string;
+  onEdit?: (msg: Message) => void;
+  onDelete?: (msg: Message) => void;
 };
 
-export default function MessageOptionsModal({
+const MessageOptionsModal: React.FC<Props> = ({
   visible,
   onClose,
-  onReply,
-  onReact,
+  message,
+  currentAnonId,
+  currentRole,
   onEdit,
   onDelete,
-}: Props) {
+}) => {
+  if (!message) return null;
+
+  const isAdmin = currentRole === "admin";
+  const isMine = message.isAdmin
+    ? isAdmin
+    : String(message.anonId) === String(currentAnonId);
+
+  const canDelete = isAdmin || isMine;
+
+  useEffect(() => {
+    if (visible) {
+      AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+        if (enabled) {
+          AccessibilityInfo.announceForAccessibility("Message options opened");
+        }
+      });
+    }
+  }, [visible]);
+
+  const confirmDelete = () => {
+    Alert.alert(
+      "Delete message",
+      "Are you sure you want to delete this message?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            onDelete?.(message);
+            onClose();
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Modal
-      transparent
       visible={visible}
+      transparent
       animationType="fade"
       onRequestClose={onClose}
-      statusBarTranslucent
+      statusBarTranslucent={Platform.OS === "android"}
     >
-      <View style={styles.overlay}>
-        <View style={styles.box}>
-          {/* TOP ROW: Title + Close */}
-          <View style={styles.topRow}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet}>
+          <View style={styles.header}>
             <Text style={styles.title}>Message options</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close message options">
-              <Ionicons name="close" size={22} color="#222" />
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
 
-          {/* OPTIONS */}
-          <TouchableOpacity style={styles.item} onPress={onReply} accessibilityLabel="Reply">
-            <Text style={styles.itemText}>Reply</Text>
-          </TouchableOpacity>
+          <View style={styles.options}>
+            {isMine && (
+              <TouchableOpacity
+                style={styles.option}
+                onPress={() => {
+                  onEdit?.(message);
+                  onClose();
+                }}
+              >
+                <Text style={styles.optionText}>EDIT</Text>
+              </TouchableOpacity>
+            )}
 
-          <TouchableOpacity style={styles.item} onPress={onReact} accessibilityLabel="React">
-            <Text style={styles.itemText}>React</Text>
-          </TouchableOpacity>
+            {canDelete && (
+              <TouchableOpacity
+                style={[styles.option, styles.deleteOption]}
+                onPress={confirmDelete}
+              >
+                <Text style={[styles.optionText, styles.deleteText]}>
+                  DELETE
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-          <TouchableOpacity style={styles.item} onPress={onEdit} accessibilityLabel="Edit">
-            <Text style={styles.itemText}>Edit</Text>
+          <TouchableOpacity style={styles.cancel} onPress={onClose}>
+            <Text style={styles.cancelText}>CANCEL</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity style={styles.item} onPress={onDelete} accessibilityLabel="Delete">
-            <Text style={[styles.itemText, { color: "#D04444" }]}>Delete</Text>
-          </TouchableOpacity>
-
-          {/* CANCEL */}
-          <TouchableOpacity style={styles.cancelBtn} onPress={onClose} accessibilityLabel="Cancel">
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  overlay: {
+  backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
+    padding: 16,
   },
-  box: {
-    width: "100%",
-    maxWidth: 420,
+  sheet: {
     backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 14,
-    // shadow / elevation
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 6 },
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    borderRadius: 10,
+    paddingBottom: 10,
   },
-  topRow: {
+  header: {
+    padding: 16,
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111",
-  },
-  closeBtn: {
-    padding: 6,
-  },
-  item: {
+  title: { fontSize: 18, fontWeight: "600" },
+
+  options: {
+    flexDirection: "row",
+    justifyContent: "space-around",
     paddingVertical: 12,
-    paddingHorizontal: 6,
   },
-  itemText: {
-    fontSize: 16,
-    color: "#222",
-  },
-  cancelBtn: {
-    marginTop: 8,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-  cancelText: {
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6A5AE0",
-  },
+  option: { paddingVertical: 12, minWidth: "30%", alignItems: "center" },
+  optionText: { fontSize: 15, fontWeight: "600", color: "#111827" },
+
+  deleteOption: { backgroundColor: "#FFF1F2", borderRadius: 8 },
+  deleteText: { color: "#DC2626" },
+
+  cancel: { paddingVertical: 12, alignItems: "center" },
+  cancelText: { fontWeight: "700", color: "#374151" },
 });
+
+export default MessageOptionsModal;

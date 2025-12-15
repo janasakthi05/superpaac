@@ -6,12 +6,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase";
-// use theme for readable colors in light/dark modes
-import { useTheme } from "../contexts/ThemeContext";
 
 export default function GroupChatScreen({ route }: any) {
   const { anonId, role } = route.params;
-  const { colors, isDark } = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   
@@ -116,6 +113,7 @@ export default function GroupChatScreen({ route }: any) {
     await addDoc(collection(db, "groupChatMessages"), {
       text: input.trim(),
       anonId,
+      conversationId: String(anonId),
       isAdmin: role === "admin",
       timestamp: serverTimestamp(),
     });
@@ -153,21 +151,17 @@ export default function GroupChatScreen({ route }: any) {
         style={styles.list}
         renderItem={({ item }) => {
           const mine = role === "admin" ? item.isAdmin === true : item.anonId == anonId;
-          // colored bubble when mentor or my message — use white text on these
-          const bubbleIsColored = item.isAdmin || mine;
           return (
             <View style={[styles.wrap, mine ? styles.rightWrap : styles.leftWrap]}>
               <View style={[styles.bubble, mine ? styles.myBubble : styles.otherBubble]}>
-                <Text style={[styles.nameText, bubbleIsColored ? { color: "#FFFFFF" } : { color: colors.text }]}>{item.isAdmin ? "Mentor" : `Anonymous #${item.anonId}`}</Text>
-                <Text style={[styles.msgText, bubbleIsColored ? { color: "#FFFFFF" } : { color: colors.text }]}>{item.text}</Text>
-                <Text style={[styles.timeText, bubbleIsColored ? { color: "#E5E7EB" } : { color: isDark ? "#E5E7EB" : colors.textSecondary }]}>{item.time}</Text>
+                <Text style={styles.nameText}>{item.isAdmin ? "Mentor" : `Anonymous #${item.anonId}`}</Text>
+                <Text style={styles.msgText}>{item.text}</Text>
+                <Text style={styles.timeText}>{item.time}</Text>
               </View>
             </View>
           );
         }}
-        // ensure list can scroll when keyboard is open
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}
-        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 16 }}
       />
 
       {/* Typing indicator */}

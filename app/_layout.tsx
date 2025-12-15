@@ -3,6 +3,10 @@ import { useEffect } from "react";
 import { Stack, useRouter } from "expo-router";
 import { ThemeProvider } from "../src/contexts/ThemeContext";
 import type { NotificationBehavior } from "expo-notifications";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+// Mount the global toast so showToast() works anywhere
+import VibeToast from "../src/components/VibeToast";
 
 export default function RootLayout() {
   const router = useRouter();
@@ -52,12 +56,17 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="login" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-      </Stack>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+        </Stack>
+
+        {/* global toast overlay — placed after navigation so it overlays screens */}
+        <VibeToast />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
