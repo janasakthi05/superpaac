@@ -762,13 +762,11 @@ if (file.size && file.size > MAX_FILE_BYTES) {
               activeOpacity={0.9}
               onLongPress={() => handleMessageLongPress(item)}
               style={[
-                styles.bubble,
-                bubbleStyle,
-                item.type === "image" && {
-                  maxWidth: undefined,
-                 
-                },
-              ]}
+  styles.bubble,
+  bubbleStyle,
+  item.type === "image" && styles.imageBubble,
+]}
+
             >
              <Text
   style={[styles.nameText, { color: colors.text }]}
@@ -821,35 +819,47 @@ if (file.size && file.size > MAX_FILE_BYTES) {
       ]}
     >
       <Image
-        source={{ uri: item.mediaUrl }}
-        style={styles.imageMessage}
-        resizeMode="cover"
-      />
+  source={{ uri: item.mediaUrl }}
+  style={styles.imageMessage}
+  resizeMode="cover"
+  
+/>
     </View>
   </TouchableOpacity>
 )}
 
-
-              {item.type === "file" && item.mediaUrl && (
+{item.type === "file" && item.mediaUrl && (
   <TouchableOpacity
-    style={[styles.fileContainer]}
+    style={[
+      styles.fileContainer,
+      { backgroundColor: colors.surface },
+    ]}
     onPress={() => WebBrowser.openBrowserAsync(item.mediaUrl!)}
   >
-    <Ionicons
-      name={getFileIcon(item.mediaMime)}
-      size={22}
-      color={colors.primary}
-    />
-    <View style={{ marginLeft: 8 }}>
-      <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>
-        {item.mediaName}
-      </Text>
-      <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+    <View style={styles.fileIconBox}>
+      <Ionicons
+        name={getFileIcon(item.mediaMime)}
+        size={22}
+        color={colors.primary}
+      />
+    </View>
+
+    <View style={styles.fileTextBox}>
+      <Text
+  style={[styles.fileName, { color: colors.text }]}
+  numberOfLines={2}          // ✅ REQUIRED
+  ellipsizeMode="tail"
+>
+  {item.mediaName}
+</Text>
+
+      <Text style={[styles.fileMeta, { color: colors.textSecondary }]}>
         {formatSize(item.mediaSize)}
       </Text>
     </View>
   </TouchableOpacity>
 )}
+
 
               <Text style={[styles.timeText, { color: colors.textSecondary }]}>
                 {item.time}
@@ -1273,7 +1283,7 @@ headerSubtitle: {
   leftAlign: { justifyContent: "flex-start" },
   rightAlign: { justifyContent: "flex-end" },
   bubble: {
-  maxWidth: "82%",
+  maxWidth: Platform.OS === "web" ? "82%" : "92%",
   minWidth: 120,
   borderRadius: 18,
   paddingHorizontal: 14,
@@ -1307,34 +1317,64 @@ headerSubtitle: {
   alignSelf: "flex-end",
 },
   imageMessage: {
-  width: 240,
-  height: 240,
+  width: "100%",
+  maxWidth: Platform.OS === "web" ? 300 : 240,
+  maxHeight: Platform.OS === "web" ? 400 : 320,
+  aspectRatio: 3 / 4,
   borderRadius: 18,
 },
 
-
-   imageWrapper: {
+imageWrapper: {
   marginTop: 8,
   borderRadius: 18,
   overflow: "hidden",
   backgroundColor: "#00000010",
+  maxWidth: Platform.OS === "web" ? 320 : 260,
+  width: "100%",
 },
 
-
-
-  fileContainer: {
+imageBubble: {
+  padding: 6,
+  maxWidth: Platform.OS === "web" ? 320 : 260,
+},
+fileContainer: {
   marginTop: 6,
   flexDirection: "row",
-  alignItems: "flex-start",   // 🔑 important
-  padding: 8,
-  borderRadius: 12,
+  alignItems: "center",
+  paddingVertical: 10,
+  paddingHorizontal: 12,
+  borderRadius: 14,
+  gap: 12,width: "100%",          // ✅ force measurable width
+  alignSelf: "stretch",              // 🔑 ensures width on mobile
 },
 
-  fileName: {
-  fontSize: 13,
-  fontWeight: "600",
-  marginBottom: 1,
+fileIconBox: {
+  width: 36,               // ✅ balanced size (not too big, not too small)
+  height: 36,
+  borderRadius: 10,
+  backgroundColor: "rgba(99,102,241,0.12)",
+  alignItems: "center",
+  justifyContent: "center",
 },
+
+fileTextBox: {
+  flex: 1,                 // 🔑 takes remaining space
+  minWidth: 0,  flexShrink: 1,            // 🔑 REQUIRED for text visibility on mobile
+  justifyContent: "center",
+},
+
+fileName: {
+  fontSize: 14,            // ✅ readable on mobile & web
+  fontWeight: "600",
+  lineHeight: 18,  flexShrink: 1, 
+},
+
+fileMeta: {
+  fontSize: 11,
+  marginTop: 2,
+  opacity: 0.75,
+},
+
 
   replyPreview: { marginTop: 6, marginBottom: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
   replyLabel: { fontSize: 10 },
