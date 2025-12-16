@@ -103,6 +103,7 @@ const didInitialScrollRef = useRef(false);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+const [webMenuMessage, setWebMenuMessage] = useState<ChatMessage | null>(null);
 
   const [uploadPercent, setUploadPercent] = useState<number>(0);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -664,7 +665,13 @@ if (file.size && file.size > MAX_FILE_BYTES) {
       onPress: () => {},
     });
 
-    Alert.alert("Message options", "", options);
+    if (Platform.OS === "web") {
+  setWebMenuMessage(msg);
+  return;
+}
+
+Alert.alert("Message options", "", options);
+
   },
   [anonId, isAdmin]
 );
@@ -700,26 +707,33 @@ if (file.size && file.size > MAX_FILE_BYTES) {
     setSearchQuery(text);
   }, []);
 
-  const handleLogout = useCallback(() => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes",
-          style: "destructive",
-          onPress: () => router.replace("/login"),
-        },
-      ],
-      { cancelable: true }
-    );
-  }, [router]);
+ const handleLogout = useCallback(() => {
+  // 🌐 WEB: use browser confirm (Alert.alert is broken on web)
+  if (Platform.OS === "web") {
+    const ok = window.confirm("Are you sure you want to logout?");
+    if (ok) {
+      // 🔥 hard reset – exits /(tabs) completely
+      window.location.replace("/login");
+    }
+    return;
+  }
 
-  // --- scrolling optimization: scroll to end when messages change (debounced via RAF) ---
-  
+  // 📱 MOBILE: native Alert works correctly
+  Alert.alert(
+    "Logout",
+    "Are you sure you want to logout?",
+    [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes",
+        style: "destructive",
+        onPress: () => router.replace("/login"),
+      },
+    ],
+    { cancelable: true }
+  );
+}, [router]);
 
-  // --- memoized bubble to prevent unnecessary rerenders ---
   const MessageBubble = React.memo(
   ({ item }: { item: ChatMessage }) => {
     const mine = item.isAdmin === isAdmin && item.anonId === anonId;
@@ -1139,6 +1153,82 @@ if (file.size && file.size > MAX_FILE_BYTES) {
 )}
 
       <ReactionPicker visible={showReactionPicker} onClose={() => { setShowReactionPicker(false); setReactionMessage(null); }} onSelectReaction={handleReaction} currentReaction={reactionMessage?.reactions?.[isAdmin ? `admin_${anonId}` : `student_${anonId}`]} />
+        {Platform.OS === "web" && webMenuMessage && (
+  <View style={styles.webMenuOverlay}>
+    <View style={styles.webMenu}>
+      {!(
+        webMenuMessage.isAdmin === isAdmin &&
+        webMenuMessage.anonId === anonId
+      ) && (
+        <TouchableOpacity
+          onPress={() => {
+            setReactionMessage(webMenuMessage);
+            setShowReactionPicker(true);
+            setWebMenuMessage(null);
+          }}
+        >
+          <Text style={styles.webMenuItem}>React</Text>
+        </TouchableOpacity>
+      )}
+
+      {(webMenuMessage.isAdmin === isAdmin &&
+        webMenuMessage.anonId === anonId) && (
+        <TouchableOpacity
+          onPress={() => {
+            setEditingMessage(webMenuMessage);
+            setInput(webMenuMessage.text || "");
+            setWebMenuMessage(null);
+          }}
+        >
+          <Text style={styles.webMenuItem}>Edit</Text>
+        </TouchableOpacity>
+      )}
+
+      {isAdmin && (
+        <TouchableOpacity
+          onPress={async () => {
+            await updateDoc(
+              doc(db, "groupChatMessages", webMenuMessage.id),
+              {
+                pinned: !webMenuMessage.pinned,
+                pinnedBy: webMenuMessage.pinned
+                  ? null
+                  : "SuperPaac Mentor",
+              }
+            );
+            setWebMenuMessage(null);
+          }}
+        >
+          <Text style={styles.webMenuItem}>
+            {webMenuMessage.pinned ? "Unpin" : "Pin"}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {(isAdmin ||
+        (webMenuMessage.isAdmin === isAdmin &&
+          webMenuMessage.anonId === anonId)) && (
+        <TouchableOpacity
+          onPress={async () => {
+            await deleteDoc(
+              doc(db, "groupChatMessages", webMenuMessage.id)
+            );
+            setWebMenuMessage(null);
+          }}
+        >
+          <Text style={[styles.webMenuItem, { color: "red" }]}>
+            Delete
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity onPress={() => setWebMenuMessage(null)}>
+        <Text style={styles.webMenuCancel}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+)}
+
 
       <ChatInfoModal visible={showChatInfo} onClose={() => setShowChatInfo(false)} isAdmin={isAdmin} anonId={anonId} totalMessages={messages.length} totalParticipants={new Set([...messages.map(m => m.anonId), anonId]).size} sharedMedia={messages.filter(m => m.type !== "text")} />
       {imageViewerVisible && activeImageUrl && (
@@ -1375,6 +1465,33 @@ fileMeta: {
   opacity: 0.75,
 },
 
+webMenuOverlay: {
+  position: "fixed",
+  inset: 0,
+  backgroundColor: "rgba(0,0,0,0.4)",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 9999,
+},
+
+webMenu: {
+  backgroundColor: "#fff",
+  borderRadius: 14,
+  padding: 16,
+  width: 260,
+},
+
+webMenuItem: {
+  fontSize: 15,
+  paddingVertical: 10,
+},
+
+webMenuCancel: {
+  fontSize: 14,
+  paddingTop: 12,
+  textAlign: "center",
+  opacity: 0.6,
+},
 
   replyPreview: { marginTop: 6, marginBottom: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
   replyLabel: { fontSize: 10 },

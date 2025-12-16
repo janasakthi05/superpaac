@@ -77,11 +77,10 @@ const lightThemeColors: ThemeColors = {
   text: '#0B1220',
   textSecondary: '#1F2937',
   textMuted: '#6B7280',
+
 myBubble: '#F3F4FF',
 mentorBubble: '#E7DBFF',
 otherBubble: '#FAFAFD',
-    // Neutral cloud gray (keeps focus on content)
-
 
   border: '#E4E9F2',
   input: '#FFFFFF',

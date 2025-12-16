@@ -58,22 +58,36 @@ const MessageOptionsModal: React.FC<Props> = ({
   }, [visible]);
 
   const confirmDelete = () => {
-    Alert.alert(
-      "Delete message",
-      "Are you sure you want to delete this message?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            onDelete?.(message);
-            onClose();
-          },
-        },
-      ]
+  // 🌐 WEB → Alert.alert does NOT work
+  if (Platform.OS === "web") {
+    const ok = window.confirm(
+      "Are you sure you want to delete this message?"
     );
-  };
+    if (ok) {
+      onDelete?.(message);
+      onClose();
+    }
+    return;
+  }
+
+  // 📱 MOBILE → keep native Alert (unchanged)
+  Alert.alert(
+    "Delete message",
+    "Are you sure you want to delete this message?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          onDelete?.(message);
+          onClose();
+        },
+      },
+    ]
+  );
+};
+
 
   return (
     <Modal
