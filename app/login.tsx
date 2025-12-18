@@ -14,6 +14,8 @@ import {
   Easing,
   Pressable,
 } from "react-native";
+import FireSparks from "../src/components/FireSparks";
+
 import { useRouter } from "expo-router";
 import {
   collection,
@@ -64,10 +66,22 @@ export default function LoginScreen() {
     const trimmedRoll = roll.trim();
     const trimmedPass = password.trim();
 
-    if (!trimmedRoll || !trimmedPass) {
-      showToast("Enter Roll Number & Password", { type: "info" });
-      return;
-    }
+  if (!trimmedRoll && !trimmedPass) {
+  showToast("Enter Roll Number and Password", { type: "info" });
+  return;
+}
+
+if (!trimmedRoll) {
+  showToast("Enter Roll Number", { type: "info" });
+  return;
+}
+
+if (!trimmedPass) {
+  showToast("Enter Password", { type: "info" });
+  return;
+}
+
+
 
     if (trimmedRoll.toLowerCase() === "admin") {
       try {
@@ -110,7 +124,7 @@ export default function LoginScreen() {
       const enrolledSnap = await getDoc(enrolledRef);
 
       if (!enrolledSnap.exists() || enrolledSnap.data()?.valid !== true) {
-        showToast("This roll number is not in the SuperPaac list.\nOnly whitelisted students can log in.", { type: "error", duration: 4200 });
+        showToast("This Student is not in the SuperPaac.", { type: "error", duration: 4200 });
         return;
       }
 
@@ -195,10 +209,18 @@ export default function LoginScreen() {
         <Animated.View style={[styles.center, entranceStyle]}>
           <Animated.View style={{ alignItems: "center", marginBottom: 14 }}>
             <View style={styles.pulseBadge}>
-              <LinearGradient colors={["rgba(255,200,87,0.12)", "rgba(255,255,255,0.02)"]} style={styles.pulseInner}>
-                <Text style={styles.pulseText}>SP</Text>
-              </LinearGradient>
-            </View>
+  <LinearGradient
+    colors={["rgba(255,215,120,0.22)", "rgba(255,255,255,0.06)"]}
+    style={styles.pulseInner}
+  >
+    {/* 🔥 FIRE SPARKS */}
+    <FireSparks />
+
+    {/* TEXT ABOVE SPARKS */}
+    <Text style={styles.pulseText}>SP</Text>
+  </LinearGradient>
+</View>
+
 
             <Text style={styles.title}>SuperPaac</Text>
             <Text style={styles.subtitle}>Anonymous • Safe • Supportive</Text>
@@ -270,8 +292,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, zIndex: 2 },
   center: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   pulseBadge: { width: 96, height: 96, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
-  pulseInner: { width: 84, height: 84, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  pulseText: { color: "#2B2B2B", fontSize: 32, fontWeight: "900" },
+pulseInner: {
+  width: 84,
+  height: 84,
+  borderRadius: 22,
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden", // ⬅️ REQUIRED
+},
+
+pulseText: {
+  color: "#FFFFFF",
+  fontSize: 32,
+  fontWeight: "900",
+  letterSpacing: 1,
+  zIndex: 10,
+  textShadowColor: "rgba(255,255,255,0.7)",
+  textShadowOffset: { width: 0, height: 0 },
+  textShadowRadius: 8,
+},
+
+
   title: { color: "#F8FAFC", fontSize: 34, fontWeight: "900", marginTop: 4 },
   subtitle: { color: "#97A6B8", marginTop: 6 },
   card: { width: "100%", maxWidth: 640, backgroundColor: "rgba(12,18,32,0.66)", borderRadius: 18, padding: 22, marginTop: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.03)", shadowColor: "#000", shadowOpacity: 0.36, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 18, overflow: "hidden" },

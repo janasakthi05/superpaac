@@ -29,6 +29,8 @@ export default function VibeToast() {
     Array<{ id: number; text: string; opts?: ToastOptions }>
   >([]);
   const idRef = useRef(1);
+const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const animY = useRef(new Animated.Value(80)).current;
   const animOpacity = useRef(new Animated.Value(0)).current;
@@ -87,31 +89,42 @@ export default function VibeToast() {
       });
 
       // ✅ AUTO DISMISS AFTER 3 SECONDS
-      const dur = next.opts?.duration ?? 3000;
-      const t = setTimeout(() => {
-        hideCurrent();
-      }, dur);
-      return () => clearTimeout(t);
+     const dur = Math.min(next.opts?.duration ?? 2000, 2000);
+
+      // ⏱️ FORCE AUTO DISMISS AFTER 2 SECONDS
+if (timerRef.current) {
+  clearTimeout(timerRef.current);
+}
+
+timerRef.current = setTimeout(() => {
+  hideCurrent();
+}, 2000);
+
     }
   }, [queue, current]);
 
-  function hideCurrent() {
-    Animated.parallel([
-      Animated.timing(animY, {
-        toValue: 80,
-        duration: 300,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(animOpacity, {
-        toValue: 0,
-        duration: 260,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrent(null);
-    });
+function hideCurrent() {
+  if (timerRef.current) {
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
   }
+
+  Animated.parallel([
+    Animated.timing(animY, {
+      toValue: 80,
+      duration: 300,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }),
+    Animated.timing(animOpacity, {
+      toValue: 0,
+      duration: 260,
+      useNativeDriver: true,
+    }),
+  ]).start(() => {
+    setCurrent(null);
+  });
+}
 
   if (!current) return null;
 
