@@ -236,7 +236,11 @@ const handleScroll = useCallback((event: any) => {
 
   // --- realtime subscription (scroll on initial load + updates) ---
   useEffect(() => {
-    const q = query(collection(db, "groupChatMessages"), orderBy("timestamp", "asc"));
+   const q = query(
+  collection(db, "groupChatMessages"),
+  orderBy("clientTimestamp", "asc")
+);
+
     const unsub = onSnapshot(q, (snap) => {
   const list: ChatMessage[] = snap.docs.map((d) => {
     const data: any = d.data();
@@ -255,11 +259,16 @@ const handleScroll = useCallback((event: any) => {
       pinned: !!data.pinned,
       pinnedBy: data.pinnedBy || null,
       reactions: data.reactions || {},
-      time:
-        data.timestamp?.toDate?.().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }) || "",
+     time: data.timestamp?.toDate
+  ? data.timestamp.toDate().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  : new Date(data.clientTimestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+
     };
   });
   
@@ -361,15 +370,18 @@ const handleScroll = useCallback((event: any) => {
       return;
     }
 
-    // NEW MESSAGE
-    const payload: any = {
+   const payload: any = {
   text: trimmed,
   anonId: String(anonId),
-  conversationId: String(anonId), // ✅ REQUIRED
+  conversationId: String(anonId),
   isAdmin,
   type: "text",
+
+  // 🔑 BOTH timestamps
   timestamp: serverTimestamp(),
+  clientTimestamp: Date.now(),
 };
+
 
 
     if (replyTo) {
@@ -485,17 +497,19 @@ const handleScroll = useCallback((event: any) => {
 }
 
       const url = await uploadToStorage(uri, filename, (pct) => setUploadPercent(pct));
+const payload: any = {
+  text: "",
+  anonId,
+  conversationId: String(anonId),
+  isAdmin,
+  type: "image",
+  mediaUrl: url,
+  mediaName: filename,
 
-      const payload: any = {
-        text: "",
-        anonId,
-        conversationId: String(anonId),
-        isAdmin,
-        type: "image" as const,
-        mediaUrl: url,
-        mediaName: filename,
-        timestamp: serverTimestamp(),
-      };
+  timestamp: serverTimestamp(),
+  clientTimestamp: Date.now(),
+};
+
 
       if (replyTo) {
         payload.replyToId = replyTo.id;
@@ -549,16 +563,19 @@ if (file.size && file.size > MAX_FILE_BYTES) {
     );
 
     await addDoc(collection(db, "groupChatMessages"), {
-      anonId,
-      conversationId: String(anonId),
-      isAdmin,
-      type: "file",
-      mediaUrl: url,
-      mediaName: file.name,
-      mediaSize: file.size,
-      mediaMime: file.mimeType,
-      timestamp: serverTimestamp(),
-    });
+  anonId,
+  conversationId: String(anonId),
+  isAdmin,
+  type: "file",
+  mediaUrl: url,
+  mediaName: file.name,
+  mediaSize: file.size,
+  mediaMime: file.mimeType,
+
+  timestamp: serverTimestamp(),
+  clientTimestamp: Date.now(),
+});
+
 
     setUploadSuccess(true);
     setTimeout(() => setUploadSuccess(false), 2000);
@@ -1273,7 +1290,7 @@ const styles = StyleSheet.create({
   alignItems: "center",        // ✅ keep vertical centering
   borderBottomWidth: 0.5,
   borderBottomColor: "rgba(136, 63, 36, 0.6)",
-  shadowColor: "#1dcf28ff",
+  shadowColor: "#ea9bcaff",
   shadowOpacity: 0.3,
   shadowRadius: 14,
   shadowOffset: { width: 0, height: 8 },
