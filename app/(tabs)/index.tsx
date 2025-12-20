@@ -1,6 +1,7 @@
 // app/(tabs)/index.tsx
 import * as DocumentPicker from "expo-document-picker";
 import * as WebBrowser from "expo-web-browser";
+import * as Clipboard from "expo-clipboard";
 
 import {
   PanGestureHandler,
@@ -66,6 +67,7 @@ type ChatMessage = {
   isAdmin: boolean;
   time: string;
   type: "text" | "image" | "file";
+   createdAt?: Date;
   mediaUrl?: string;
   mediaName?: string;
     mediaSize?: number;
@@ -79,6 +81,27 @@ type ChatMessage = {
   reactions?: { [userId: string]: string };
 };
 type PanEvent = PanGestureHandlerGestureEvent;
+// 📅 DATE HELPERS (WhatsApp-style)
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const getDateLabel = (date: Date) => {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (isSameDay(date, today)) return "Today";
+  if (isSameDay(date, yesterday)) return "Yesterday";
+
+  return date.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 
 export default function ChatTabScreen() {
   const router = useRouter();
@@ -98,12 +121,13 @@ const insets = useSafeAreaInsets();
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;   // 2 MB
 const MAX_FILE_BYTES  = 10 * 1024 * 1024;  // 10 MB
 const didInitialScrollRef = useRef(false);
-
+const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
 const [webMenuMessage, setWebMenuMessage] = useState<ChatMessage | null>(null);
+const messageIndexMapRef = useRef<Record<string, number>>({});
 
   const [uploadPercent, setUploadPercent] = useState<number>(0);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -230,6 +254,29 @@ const handleScroll = useCallback((event: any) => {
   }
 };
 
+const jumpToMessageById = useCallback((messageId: string) => {
+  const index = messageIndexMapRef.current[messageId];
+  if (index === undefined) return;
+
+  setHighlightedMessageId(messageId);
+  setTimeout(() => setHighlightedMessageId(null), 1200);
+
+  requestAnimationFrame(() => {
+    try {
+      listRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    } catch {
+      listRef.current?.scrollToOffset({
+        offset: Math.max(index * 80, 0),
+        animated: true,
+      });
+    }
+  });
+}, []);
+
 
 
   const currentDisplayName = isAdmin ? "SuperPaac Mentor" : "Anonymous";
@@ -244,6 +291,10 @@ const handleScroll = useCallback((event: any) => {
     const unsub = onSnapshot(q, (snap) => {
   const list: ChatMessage[] = snap.docs.map((d) => {
     const data: any = d.data();
+    const createdAt: Date =
+  data.timestamp?.toDate?.() ??
+  new Date(data.clientTimestamp ?? Date.now());
+
     return {
       id: d.id,
       text: data.text ?? "",
@@ -259,15 +310,12 @@ const handleScroll = useCallback((event: any) => {
       pinned: !!data.pinned,
       pinnedBy: data.pinnedBy || null,
       reactions: data.reactions || {},
-     time: data.timestamp?.toDate
-  ? data.timestamp.toDate().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  : new Date(data.clientTimestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    createdAt,
+
+time: createdAt.toLocaleTimeString([], {
+  hour: "2-digit",
+  minute: "2-digit",
+}),
 
     };
   });
@@ -298,15 +346,21 @@ const handleScroll = useCallback((event: any) => {
 }
 
 }
-
-
-  // update last message count
   lastMessageCountRef.current = list.length;
 });
 
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+  const map: Record<string, number> = {};
+  messages.forEach((m, i) => {
+    map[m.id] = i;
+  });
+  messageIndexMapRef.current = map;
+}, [messages]);
+
 
   // --- search filter ---
   useEffect(() => {
@@ -586,6 +640,29 @@ if (file.size && file.size > MAX_FILE_BYTES) {
   }
 }, [anonId, isAdmin, uploadToStorage]);
 
+const handleCopyMessage = async (msg: ChatMessage) => {
+  try {
+    if (msg.type === "text" && msg.text) {
+      await Clipboard.setStringAsync(msg.text);
+    } else if (msg.mediaUrl) {
+      await Clipboard.setStringAsync(msg.mediaUrl);
+    }
+
+    // ✅ Web-safe feedback
+    if (Platform.OS === "web") {
+      console.log("Copied to clipboard");
+    } else {
+      Alert.alert("Copied", "Message copied to clipboard");
+    }
+  } catch (err) {
+    if (Platform.OS === "web") {
+      console.error("Copy failed", err);
+    } else {
+      Alert.alert("Error", "Copy failed");
+    }
+  }
+};
+
 
   // --- long press options: REPLY + (mentor: EDIT) or (non-mentor: REACT) + PIN(for mentors) + edit/delete if mine + CANCEL ---
   const handleMessageLongPress = useCallback(
@@ -622,6 +699,10 @@ if (file.size && file.size > MAX_FILE_BYTES) {
         },
       });
     }
+options.push({
+  text: "COPY",
+  onPress: () => handleCopyMessage(msg),
+});
 
     /**
      * PIN / UNPIN
@@ -780,6 +861,7 @@ Alert.alert("Message options", "", options);
           borderColor: colors.border,
           borderWidth: 1,
         };
+const isHighlighted = item.id === highlightedMessageId;
 
     return (
       <View style={[styles.bubbleRow, mine ? styles.rightAlign : styles.leftAlign]}>
@@ -789,16 +871,19 @@ Alert.alert("Message options", "", options);
           activeOffsetX={[-10, 10]}
         >
           <Animated.View style={animatedStyle}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onLongPress={() => handleMessageLongPress(item)}
-              style={[
-  styles.bubble,
-  bubbleStyle,
-  item.type === "image" && styles.imageBubble,
-]}
-
-            >
+           <TouchableOpacity
+  activeOpacity={0.9}
+  onLongPress={() => handleMessageLongPress(item)}
+  style={[
+    styles.bubble,
+    bubbleStyle,
+    isHighlighted && {
+      borderWidth: 2,
+      borderColor: colors.primary,
+    },
+    item.type === "image" && styles.imageBubble,
+  ]}
+>
              <Text
   style={[styles.nameText, { color: colors.text }]}
   numberOfLines={1}
@@ -817,7 +902,12 @@ Alert.alert("Message options", "", options);
   />
 )}
               {item.replyToId && (
-                <View style={styles.replyPreview}>
+  <TouchableOpacity
+    activeOpacity={0.7}
+    onPress={() => jumpToMessageById(item.replyToId!)}
+    style={styles.replyPreview}
+  >
+
                   <Text
                     style={[styles.replyLabel, { color: colors.textSecondary }]}
                   >
@@ -831,7 +921,7 @@ Alert.alert("Message options", "", options);
                       {item.replyToText}
                     </Text>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
 
              {item.type === "text" && !!item.text && (
@@ -952,15 +1042,37 @@ Alert.alert("Message options", "", options);
     );
   }
 );
+  const messagesToRender = useMemo(() => (showSearch ? filteredMessages : messages), [showSearch, filteredMessages, messages]);
+const renderItem = useCallback(
+  ({ item, index }: ListRenderItemInfo<ChatMessage>) => {
+    const prev = messagesToRender[index - 1];
 
+    const itemDate = item.createdAt!;
+    const prevDate = prev?.createdAt ?? null;
 
-  const renderItem = useCallback(({ item }: ListRenderItemInfo<ChatMessage>) => {
-    return <MessageBubble item={item} />;
-  }, [MessageBubble]);
+    const showDateSeparator =
+      !prevDate || !isSameDay(itemDate, prevDate);
+
+    return (
+      <>
+        {showDateSeparator && (
+          <View style={styles.dateSeparator}>
+            <Text style={styles.dateSeparatorText}>
+              {getDateLabel(itemDate)}
+            </Text>
+          </View>
+        )}
+        <MessageBubble item={item} />
+      </>
+    );
+  },
+  [messagesToRender]
+);
+
 
   const keyExtractor = useCallback((it: ChatMessage) => it.id, []);
 
-  const messagesToRender = useMemo(() => (showSearch ? filteredMessages : messages), [showSearch, filteredMessages, messages]);
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -1238,6 +1350,17 @@ Alert.alert("Message options", "", options);
           </Text>
         </TouchableOpacity>
       )}
+<TouchableOpacity
+  onPress={() => {
+    if (webMenuMessage) {
+      handleCopyMessage(webMenuMessage);
+    }
+    setWebMenuMessage(null);
+  }}
+>
+  <Text style={styles.webMenuItem}>Copy</Text>
+</TouchableOpacity>
+
 
       <TouchableOpacity onPress={() => setWebMenuMessage(null)}>
         <Text style={styles.webMenuCancel}>Cancel</Text>
@@ -1568,5 +1691,20 @@ imageViewerClose: {
   right: 20,
   zIndex: 1000,
 },
+dateSeparator: {
+  alignSelf: "center",
+  marginVertical: 12,
+  paddingHorizontal: 14,
+  paddingVertical: 6,
+  borderRadius: 14,
+  backgroundColor: "rgba(0,0,0,0.15)",
+},
+dateSeparatorText: {
+  fontSize: 12,
+  fontWeight: "600",
+  color: "#e5e7eb",
+},
 
 });
+
+

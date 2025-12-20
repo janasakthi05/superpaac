@@ -47,7 +47,7 @@ type ChatMessage = {
 export default function ExploreScreen() {
   const { role, rollNo } =
     useGlobalSearchParams<{ role?: string; rollNo?: string }>();
-  const { colors } = useTheme();
+const { colors, isDark } = useTheme();
 
   const isAdminUser =
     role === "admin" ||
@@ -153,15 +153,55 @@ export default function ExploreScreen() {
     return () => unsub();
   }, [isAdminUser, selectedStudent]);
 
-  if (!isAdminUser) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <Text style={{ textAlign: "center", marginTop: 40 }}>
+ if (!isAdminUser) {
+  return (
+    <SafeAreaView
+      style={[
+        styles.safe,
+        { backgroundColor: colors.background },
+      ]}
+    >
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: 24,
+        }}
+      >
+        <Ionicons
+          name="lock-closed"
+          size={52}
+          color={colors.warning}
+          style={{ marginBottom: 16 }}
+        />
+
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: "800",
+            color: colors.text,
+            marginBottom: 6,
+          }}
+        >
           Mentor Access Only
         </Text>
-      </SafeAreaView>
-    );
-  }
+
+        <Text
+          style={{
+            fontSize: 14,
+            color: colors.textSecondary,
+            textAlign: "center",
+            opacity: 0.85,
+          }}
+        >
+          This section is restricted to mentors.
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 
   const isWide = layoutWidth >= 900;
   const showStudentList = !(!isWide && selectedStudent);
@@ -273,7 +313,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#0b1020",
+
   },
 
   header: {
