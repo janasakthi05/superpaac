@@ -10,6 +10,7 @@ import {
   PinchGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 
+import { where } from "firebase/firestore";
 
 import Animated, {
   runOnJS,
@@ -285,15 +286,17 @@ const jumpToMessageById = useCallback((messageId: string) => {
   useEffect(() => {
    const q = query(
   collection(db, "groupChatMessages"),
-  orderBy("clientTimestamp", "asc")
+  where("roomId", "==", "global"),
+  orderBy("timestamp", "asc")
 );
+
 
     const unsub = onSnapshot(q, (snap) => {
   const list: ChatMessage[] = snap.docs.map((d) => {
     const data: any = d.data();
-    const createdAt: Date =
-  data.timestamp?.toDate?.() ??
-  new Date(data.clientTimestamp ?? Date.now());
+  const createdAt: Date =
+  data.timestamp?.toDate?.() ?? new Date();
+
 
     return {
       id: d.id,
@@ -423,18 +426,15 @@ time: createdAt.toLocaleTimeString([], {
       setInput("");
       return;
     }
-
-   const payload: any = {
+const payload: any = {
   text: trimmed,
   anonId: String(anonId),
-  conversationId: String(anonId),
+  roomId: "global",
   isAdmin,
   type: "text",
-
-  // 🔑 BOTH timestamps
   timestamp: serverTimestamp(),
-  clientTimestamp: Date.now(),
 };
+
 
 
 
@@ -554,14 +554,12 @@ time: createdAt.toLocaleTimeString([], {
 const payload: any = {
   text: "",
   anonId,
-  conversationId: String(anonId),
+  roomId: "global",
   isAdmin,
   type: "image",
   mediaUrl: url,
   mediaName: filename,
-
   timestamp: serverTimestamp(),
-  clientTimestamp: Date.now(),
 };
 
 
@@ -616,20 +614,17 @@ if (file.size && file.size > MAX_FILE_BYTES) {
       (pct) => setUploadPercent(pct)
     );
 
-    await addDoc(collection(db, "groupChatMessages"), {
+  await addDoc(collection(db, "groupChatMessages"), {
   anonId,
-  conversationId: String(anonId),
+  roomId: "global",
   isAdmin,
   type: "file",
   mediaUrl: url,
   mediaName: file.name,
   mediaSize: file.size,
   mediaMime: file.mimeType,
-
   timestamp: serverTimestamp(),
-  clientTimestamp: Date.now(),
 });
-
 
     setUploadSuccess(true);
     setTimeout(() => setUploadSuccess(false), 2000);
@@ -1706,5 +1701,3 @@ dateSeparatorText: {
 },
 
 });
-
-
